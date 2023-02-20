@@ -1,5 +1,4 @@
 certifi==2022.12.7
-numpy==1.24.2
 pip-chill==1.0.1
 torchaudio==0.13.1
-tqdm==4.64.1
+umap-learn==0.5.3
