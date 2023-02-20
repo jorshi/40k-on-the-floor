@@ -38,6 +38,21 @@ def process_files(wav_files: List[str]):
 
         # Get the mel spectrogram
         mel_spec = mel(audio)
+        mel_stats = temporal_stats(mel_spec)
+
+
+def temporal_stats(x: torch.Tensor):
+
+    assert x.ndim == 3, "Input tensor must be 3D: (batch, freq_bins, frames)"
+
+    mean = x.mean(dim=2)
+    std = x.std(dim=2)
+    mean_diff = x.diff(dim=2).mean(dim=2)
+    std_diff = x.diff(dim=2).std(dim=2)
+
+    # Stack
+    stats = torch.hstack([mean, std, mean_diff, std_diff])
+    return stats
 
 
 def main(arguments):
