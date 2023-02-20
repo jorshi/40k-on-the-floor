@@ -122,11 +122,13 @@ def main(arguments):
     features = (features - np.min(features)) / (np.max(features) - np.min(features))
 
     # Save the features along with the file names to a JSON file
-    data = {}
+    files = []
     for i, f in enumerate(wav_files):
         x = features[i, 0]
         y = features[i, 1]
-        data[str(i)] = {"file": str(Path(f).resolve()), "x": float(x), "y": float(y)}
+        files.append({"file": str(Path(f).resolve()), "x": float(x), "y": float(y)})
+
+    data = {"files": files}
 
     with open(args.outfile, "w") as f:
         json.dump(data, f, indent=4)
