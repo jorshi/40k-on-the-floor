@@ -3,7 +3,7 @@
 
 SampleNavigatorAudioProcessorEditor::SampleNavigatorAudioProcessorEditor(
     SampleNavigatorAudioProcessor& p)
-    : AudioProcessorEditor(&p)
+    : AudioProcessorEditor(&p), processor(p)
 {
     addAndMakeVisible(editor);
     setSize(400, 300);
@@ -32,13 +32,35 @@ void SampleNavigatorAudioProcessorEditor::openFile()
 
     if (chooser.browseForFileToOpen())
     {
+        // Parse JSON file, which contains a list of files to load
         auto file = chooser.getResult();
         juce::var json = juce::JSON::parse(file);
 
         if (json.isObject())
         {
-            std::vector<juce::String> filePaths;
+            auto& filePaths = processor.getFilePaths();
+            auto& x = processor.getX();
+            auto& y = processor.getY();
+
+            // Clear existing file paths
+            filePaths.clear();
+            x.clear();
+            y.clear();
+
             std::cerr << "Loading JSON file: " << file.getFullPathName() << std::endl;
+
+            juce::var files = json["files"];
+            if (files.isArray())
+            {
+                for (auto& item : *files.getArray())
+                {
+                    juce::String filePath = item["file"];
+                    filePaths.push_back(filePath);
+                    x.push_back(item["x"]);
+                    y.push_back(item["y"]);
+                }
+            }
+            std:: cerr << "Loading " << filePaths.size() << " files" << std::endl;
         }
     }
 }
