@@ -11,6 +11,9 @@ from typing import List
 
 import torch
 import torchaudio
+from tqdm import tqdm
+
+SAMPLE_RATE = 48000
 
 
 def get_wav_files(input_dir: str):
@@ -24,9 +27,17 @@ def process_files(wav_files: List[str]):
     """
     Process a list of wav files
     """
+    mel = torchaudio.transforms.MelSpectrogram(
+        sample_rate=SAMPLE_RATE, n_fft=2048, hop_length=128, n_mels=128
+    )
     for f in wav_files:
         audio, sample_rate = torchaudio.load(f)
-        print(sample_rate)
+        # Resample if needed
+        if sample_rate != SAMPLE_RATE:
+            audio = torchaudio.transforms.Resample(sample_rate, SAMPLE_RATE)(audio)
+
+        # Get the mel spectrogram
+        mel_spec = mel(audio)
 
 
 def main(arguments):
