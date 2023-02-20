@@ -20,7 +20,7 @@ def get_wav_files(input_dir: str):
     """
     Get all wav files in a directory
     """
-    return [str(f) for f in Path(input_dir).glob("**/*.wav")]
+    return list(Path(input_dir).glob("**/*.wav"))
 
 
 def process_files(wav_files: List[str]):
@@ -30,7 +30,7 @@ def process_files(wav_files: List[str]):
     mel = torchaudio.transforms.MelSpectrogram(
         sample_rate=SAMPLE_RATE, n_fft=2048, hop_length=128, n_mels=128
     )
-    for f in wav_files:
+    for f in tqdm(wav_files):
         audio, sample_rate = torchaudio.load(f)
         # Resample if needed
         if sample_rate != SAMPLE_RATE:
