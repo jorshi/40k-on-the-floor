@@ -8,8 +8,12 @@ public:
     explicit SampleNavigatorAudioProcessorEditor(SampleNavigatorAudioProcessor&);
 
 private:
+    juce::TextButton openFileButton;
+
     void paint(juce::Graphics&) override;
     void resized() override;
+
+    void openFile();
 
     juce::GenericAudioProcessorEditor editor {processor};
 };
