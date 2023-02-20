@@ -161,3 +161,6 @@ cython_debug/
 
 # Audio data
 audio/*
+
+# JSON output
+sample_map.json
