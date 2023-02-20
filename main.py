@@ -3,15 +3,18 @@
 """A simple python script template.
 """
 
+import json
 import os
 import sys
 import argparse
 from pathlib import Path
 from typing import List
 
+import numpy as np
 import torch
 import torchaudio
 from tqdm import tqdm
+import umap
 
 SAMPLE_RATE = 48000
 
@@ -84,6 +87,16 @@ def normalize_features(features: torch.Tensor):
     return features
 
 
+def dimensionality_reduction(features: torch.Tensor):
+    """
+    Perform dimensionality reduction on the features
+    """
+    print("Performing dimensionality reduction")
+    reducer = umap.UMAP(n_components=2)
+    features = reducer.fit_transform(features)
+    return features
+
+
 def main(arguments):
 
     parser = argparse.ArgumentParser(
@@ -100,8 +113,33 @@ def main(arguments):
     # Process all the files
     features = process_files(wav_files)
 
-    # Normalize the features
+    # Normalize the features along each of the temporal stat dimensions
     features = normalize_features(features)
+    features = features.flatten(start_dim=1)
+
+    # Perform dimensionality reduction and re-normalize to [0, 1]
+    features = dimensionality_reduction(features)
+    features = (features - np.min(features)) / (np.max(features) - np.min(features))
+
+    # Save the features along with the file names to a JSON file
+    data = {}
+    for i, f in enumerate(wav_files):
+        x = features[i, 0]
+        y = features[i, 1]
+        data[str(i)] = {"file": str(Path(f).resolve()), "x": float(x), "y": float(y)}
+
+    with open(args.outfile, "w") as f:
+        json.dump(data, f, indent=4)
+
+    # Stitch the audio files together
+    # sorted_x = np.argsort(features[:, 0])
+    # stitched = []
+    # for i in sorted_x:
+    #     waveform, sample_rate = torchaudio.load(wav_files[i])
+    #     stitched.append(waveform[0, :ANALYSIS_SAMPLES])
+
+    # stitched = torch.cat(stitched, dim=0)
+    # torchaudio.save("stitched.wav", stitched.unsqueeze(0), sample_rate=SAMPLE_RATE)
 
 
 if __name__ == "__main__":
