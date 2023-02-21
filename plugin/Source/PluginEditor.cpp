@@ -3,7 +3,7 @@
 
 SampleNavigatorAudioProcessorEditor::SampleNavigatorAudioProcessorEditor(
     SampleNavigatorAudioProcessor& p)
-    : AudioProcessorEditor(&p), processor(p)
+    : AudioProcessorEditor(&p)
 {
     addAndMakeVisible(editor);
     setSize(400, 300);
@@ -38,9 +38,10 @@ void SampleNavigatorAudioProcessorEditor::openFile()
 
         if (json.isObject())
         {
-            auto& filePaths = processor.getFilePaths();
-            auto& x = processor.getX();
-            auto& y = processor.getY();
+            SampleNavigatorAudioProcessor& p = dynamic_cast<SampleNavigatorAudioProcessor&>(processor);
+            auto& filePaths = p.getFilePaths();
+            auto& x = p.getX();
+            auto& y = p.getY();
 
             // Clear existing file paths
             filePaths.clear();
@@ -61,6 +62,7 @@ void SampleNavigatorAudioProcessorEditor::openFile()
                 }
             }
             std:: cerr << "Loading " << filePaths.size() << " files" << std::endl;
+            p.reloadSamples();
         }
     }
 }

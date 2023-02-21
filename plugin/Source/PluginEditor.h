@@ -15,7 +15,5 @@ private:
 
     void openFile();
 
-    SampleNavigatorAudioProcessor& processor;
-
     juce::GenericAudioProcessorEditor editor {processor};
 };
