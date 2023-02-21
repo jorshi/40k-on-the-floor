@@ -1,14 +1,20 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-SampleNavigatorAudioProcessor::SampleNavigatorAudioProcessor()
+SampleNavigatorAudioProcessor::SampleNavigatorAudioProcessor() : numChannels(48)
 {
     parameters.add(*this);
 
-    parameters.sample->addListener(this);
+    parameters.sampleX->addListener(this);
+    parameters.sampleY->addListener(this);
 
     // Add the WAV audio format to the format manager
     formatManager.registerFormat(new juce::WavAudioFormat(), true);
+    for (int i = 0; i < numChannels; i++)
+    {
+        transportChannels.push_back(std::make_unique<juce::AudioTransportSource>());
+        mixer.addInputSource(transportChannels[i].get(), false);
+    }
 }
 
 void SampleNavigatorAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -16,6 +22,12 @@ void SampleNavigatorAudioProcessor::prepareToPlay(double sampleRate, int samples
     transport.prepareToPlay(samplesPerBlock, sampleRate);
     counter = 0;
     currentSample = -1;
+    currentChannel = 0;
+
+    for (int i = 0; i < numChannels; i++)
+        transportChannels[i]->prepareToPlay(samplesPerBlock, sampleRate);
+
+    mixer.prepareToPlay(samplesPerBlock, sampleRate);
 }
 
 void SampleNavigatorAudioProcessor::releaseResources()
@@ -28,7 +40,7 @@ void SampleNavigatorAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
 
 {
     counter += buffer.getNumSamples();
-    if (counter > getSampleRate() / 4)
+    if (counter > getSampleRate() / 2)
     {
         counter = 0;
         midiMessages.addEvent(juce::MidiMessage::noteOn(1, 60, 1.0f), 0);
@@ -51,15 +63,15 @@ void SampleNavigatorAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     {
         const auto message = metadata.getMessage();
         if (message.isNoteOn())
-        {
-            //std::cerr << "Note on: " << message.getNoteNumber() << std::endl;
-            transport.setPosition(0.0);
-            transport.start();
+        {   
+            // Restart the current sample
+            transportChannels[currentChannel]->setPosition(0);
+            transportChannels[currentChannel]->start();
         }
     }
     
     juce::AudioSourceChannelInfo info(buffer);
-    transport.getNextAudioBlock(info);
+    mixer.getNextAudioBlock(info);
 
     juce::ignoreUnused(midiMessages);
 }
@@ -117,48 +129,70 @@ void SampleNavigatorAudioProcessor::reloadSamples()
 {   
     const juce::ScopedLock myScopedLock (lock);
 
-    //currentSource.reset();
     readers.clear();
     currentSample = -1;
+    annoyIndex.reset(new AnnoyType(2));
+
     for (size_t i = 0; i < filePaths.size(); i++)
     {
         auto file = juce::File(filePaths[i]);
-        auto* reader = formatManager.createReaderFor (file);
+        auto* reader = wavFormat.createMemoryMappedReader(file);
         if (reader != nullptr)
         {   
+            reader->mapEntireFile();
+            reader->touchSample(0);
             auto newSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);
-            //transport.setSource(newSource.get(), 0, nullptr, reader->sampleRate);
             readers.push_back(std::move(newSource));
-            //newSource->setLooping(false);
-            //readerSource.reset(newSource.release());
-            //transport.setPosition(0.0);
-            //transport.stop();
-            //transport.start();
+
+            // Add to annoy index
+            std::vector<float> v = {x[i], y[i]};
+            annoyIndex->add_item(i, v.data());
         }
     }
 
-    //std::cerr << "Reloaded " << sources.size() << " samples" << std::endl;
-    //std::cerr << "Total length" << currentSource->getTotalLength() << std::endl;
+    // Build nearest neighbour index
+    annoyIndex->build(10);
     std::cerr << "Created readers for " << readers.size() << " samples" << std::endl;
 }
 
 void SampleNavigatorAudioProcessor::parameterValueChanged(int parameterIndex, float newValue)
 {
-    if (parameterIndex == parameters.sample->getParameterIndex())
+    if (parameterIndex == parameters.sampleX->getParameterIndex() || parameterIndex == parameters.sampleY->getParameterIndex())
     {
+        // Get the updated and current X and Y values
+        if (parameterIndex == parameters.sampleX->getParameterIndex()) {
+            float x = newValue;
+            float y = parameters.sampleY->get();
+        }
+        else {
+            float x = parameters.sampleX->get();
+            float y = newValue;
+        }
+
         if (readers.size() > 0)
-        {
-            auto mappedIndex = juce::jmap<float>(newValue, 0.0, 1.0, 0.0, static_cast<float>(readers.size() - 1));
-            int index = static_cast<int>(mappedIndex);
+        {   
+            std::vector<float> v = {x, y};
+            std::vector<float> distances;
+            std::vector<int> indices;
+            annoyIndex->get_nns_by_vector(v.data(), 1, 5, &indices, &distances);
+            int index = indices[0];
+
             if (index < readers.size())
-            {
+            {   
+                if (currentSample == index)
+                    return;
+
                 currentSample = index;
-                transport.setSource(readers[index].get(), 0, nullptr, readers[index]->getAudioFormatReader()->sampleRate);
-                std::cerr << "Set source to " << index << std::endl;
+                currentChannel = (currentChannel + 1) % numChannels;
+                if (transportChannels[currentChannel]->isPlaying()) {   
+                    return;
+                }
+                transportChannels[currentChannel]->stop();
+                transportChannels[currentChannel]->setSource(readers[index].get(), 0, nullptr, readers[index]->getAudioFormatReader()->sampleRate);
+                transportChannels[currentChannel]->setPosition(0.0);
             }
         }
     }
-    //std::cerr << "Parameter " << parameterIndex << " changed to " << newValue << std::endl;
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
