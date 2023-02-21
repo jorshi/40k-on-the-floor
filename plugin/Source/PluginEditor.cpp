@@ -21,7 +21,8 @@ void SampleNavigatorAudioProcessorEditor::paint(juce::Graphics& g)
 void SampleNavigatorAudioProcessorEditor::resized()
 {
     editor.setBounds(getLocalBounds());
-    openFileButton.setBounds(getLocalBounds().reduced(10));
+    openFileButton.setBounds(10, 100, 100, 30);
+    //openFileButton.setBounds(getLocalBounds().reduced(10));
 }
 
 void SampleNavigatorAudioProcessorEditor::openFile()

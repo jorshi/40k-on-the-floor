@@ -2,7 +2,7 @@
 
 #include "Parameters.h"
 
-class SampleNavigatorAudioProcessor : public PluginHelpers::ProcessorBase
+class SampleNavigatorAudioProcessor : public PluginHelpers::ProcessorBase, public juce::AudioProcessorParameter::Listener
 {
 public:
     SampleNavigatorAudioProcessor();
@@ -17,6 +17,9 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
     void reloadSamples();
 
+    void parameterValueChanged(int parameterIndex, float newValue) override;
+    void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override {};
+
     std::vector<juce::String>& getFilePaths() { return filePaths; }
     std::vector<float>& getX() { return x; }
     std::vector<float>& getY() { return y; }
@@ -25,15 +28,19 @@ private:
 
     Parameters parameters;
 
+    int counter;
+    int currentSample = 0;
+
     //std::vector<std::unique_ptr<juce::AudioFormatReaderSource>> sources;
-    juce::AudioTransportSource transport;
 
     std::vector<juce::String> filePaths;
     std::vector<float> x;
     std::vector<float> y;
 
+    std::vector<std::unique_ptr<juce::AudioFormatReaderSource>> readers;
     std::unique_ptr<juce::AudioFormatReaderSource> readerSource;
     juce::AudioFormatManager formatManager;
+    juce::AudioTransportSource transport;
 
     juce::CriticalSection lock;
 };

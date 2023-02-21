@@ -5,6 +5,8 @@ SampleNavigatorAudioProcessor::SampleNavigatorAudioProcessor()
 {
     parameters.add(*this);
 
+    parameters.sample->addListener(this);
+
     // Add the WAV audio format to the format manager
     formatManager.registerFormat(new juce::WavAudioFormat(), true);
 }
@@ -12,6 +14,8 @@ SampleNavigatorAudioProcessor::SampleNavigatorAudioProcessor()
 void SampleNavigatorAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     transport.prepareToPlay(samplesPerBlock, sampleRate);
+    counter = 0;
+    currentSample = -1;
 }
 
 void SampleNavigatorAudioProcessor::releaseResources()
@@ -23,6 +27,13 @@ void SampleNavigatorAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
                                                    juce::MidiBuffer& midiMessages)
 
 {
+    counter += buffer.getNumSamples();
+    if (counter > getSampleRate() / 4)
+    {
+        counter = 0;
+        midiMessages.addEvent(juce::MidiMessage::noteOn(1, 60, 1.0f), 0);
+    }
+
     const juce::ScopedTryLock myScopedTryLock (lock);
     if (!myScopedTryLock.isLocked())
     {
@@ -30,7 +41,7 @@ void SampleNavigatorAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
         return;
     }
 
-    if (readerSource.get() == nullptr)
+    if (readers.size() == 0 || currentSample == -1)
     {
         buffer.clear();
         return;
@@ -107,6 +118,8 @@ void SampleNavigatorAudioProcessor::reloadSamples()
     const juce::ScopedLock myScopedLock (lock);
 
     //currentSource.reset();
+    readers.clear();
+    currentSample = -1;
     for (size_t i = 0; i < filePaths.size(); i++)
     {
         auto file = juce::File(filePaths[i]);
@@ -114,28 +127,38 @@ void SampleNavigatorAudioProcessor::reloadSamples()
         if (reader != nullptr)
         {   
             auto newSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);
-            transport.setSource(newSource.get(), 0, nullptr, reader->sampleRate);
-            newSource->setLooping(false);
-            readerSource.reset(newSource.release());
-            transport.setPosition(0.0);
-            transport.stop();
+            //transport.setSource(newSource.get(), 0, nullptr, reader->sampleRate);
+            readers.push_back(std::move(newSource));
+            //newSource->setLooping(false);
+            //readerSource.reset(newSource.release());
+            //transport.setPosition(0.0);
+            //transport.stop();
             //transport.start();
         }
-            
-        
-        break;
-
-        // if (reader != nullptr)
-        // {
-        //     // Create a new PositionableAudioSource for each sample
-        //     //sources.emplace_back(std::make_unique<juce::AudioFormatReaderSource>(reader.get(), true));
-        //     //sources.back()->setLooping(true);
-        //     //sources.back()->prepareToPlay(getSampleRate(), getBlockSize());
-        // }
     }
 
     //std::cerr << "Reloaded " << sources.size() << " samples" << std::endl;
     //std::cerr << "Total length" << currentSource->getTotalLength() << std::endl;
+    std::cerr << "Created readers for " << readers.size() << " samples" << std::endl;
+}
+
+void SampleNavigatorAudioProcessor::parameterValueChanged(int parameterIndex, float newValue)
+{
+    if (parameterIndex == parameters.sample->getParameterIndex())
+    {
+        if (readers.size() > 0)
+        {
+            auto mappedIndex = juce::jmap<float>(newValue, 0.0, 1.0, 0.0, static_cast<float>(readers.size() - 1));
+            int index = static_cast<int>(mappedIndex);
+            if (index < readers.size())
+            {
+                currentSample = index;
+                transport.setSource(readers[index].get(), 0, nullptr, readers[index]->getAudioFormatReader()->sampleRate);
+                std::cerr << "Set source to " << index << std::endl;
+            }
+        }
+    }
+    //std::cerr << "Parameter " << parameterIndex << " changed to " << newValue << std::endl;
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
